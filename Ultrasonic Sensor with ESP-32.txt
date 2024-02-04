@@ -1,0 +1,18 @@
+Ultrasonic Sensor with ESP-32:
+
+connect,
+	ultrasonic vcc -> ESP vin
+	ultrasonic gnd -> ESP gnd
+	ultrasonic Trigger -> ESP d12
+	ultrasonic ECHO -> ESP 14
+
+connect Type B USB to ESP <=> Latop
+Upload Code
+That's it . Now go to website 
+
+Components Required:
+Ultrasonic Sensor
+ESP - 32
+8 - Male to Femal wires
+Type B
+BreadBoard
