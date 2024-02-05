@@ -1,0 +1,4 @@
+Connnect,
+Vcc of DHT -> ESP Vin
+Gnd of DHT -> ESP Gnd
+Data of DHT -> ESP D14 
