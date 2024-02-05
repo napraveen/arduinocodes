@@ -1,0 +1,92 @@
+#include <ESPAsyncWebServer.h>
+#include <DHT.h>
+#include <WiFi.h>
+
+#define DHTPIN 14        // Pin where the DHT11 is connected
+#define DHTTYPE DHT11    // DHT type
+
+const char* ssid = "zz";      // Replace with your network SSID
+const char* password = "123456789"; // Replace with your network password
+
+DHT dht(DHTPIN, DHTTYPE);
+AsyncWebServer server(80);
+
+float temperature = 0.0;
+float humidity = 0.0;
+
+void setup() {
+  Serial.begin(115200);
+  dht.begin();
+
+  // Connect to Wi-Fi
+  WiFi.begin(ssid, password);
+  while (WiFi.status() != WL_CONNECTED) {
+    delay(1000);
+    Serial.println("Connecting to WiFi...");
+  }
+  Serial.println("Connected to WiFi");
+  Serial.print("IP Address: ");
+  Serial.println(WiFi.localIP());
+
+  // Serve HTML page
+    server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String html = "<html><head><meta charset=\"UTF-8\"></head><body>";  // Removed the refresh meta tag
+    html += "<h1>ESP32 DHT11 Web Server</h1>";
+    html += "<p id='temperature'>Temperature: Updating...°C</p>";
+    html += "<p id='humidity'>Humidity: Updating...%</p>";
+    html += "<script>";
+    html += "function updateData() {";
+    html += "  var xhttp = new XMLHttpRequest();";
+    html += "  xhttp.onreadystatechange = function() {";
+    html += "    if (this.readyState == 4) {";
+    html += "      if (this.status == 200) {";
+    html += "        try {";
+    html += "          var data = JSON.parse(this.responseText);";
+    html += "          document.getElementById('temperature').innerHTML = 'Temperature: ' + data.temperature + '°C';";
+    html += "          document.getElementById('humidity').innerHTML = 'Humidity: ' + data.humidity + '%';";
+    html += "        } catch (error) {";
+    html += "          console.error('Error parsing JSON:', error);";
+    html += "        }";
+    html += "      } else {";
+    html += "        console.error('HTTP request failed with status:', this.status);";
+    html += "      }";
+    html += "    }";
+    html += "  };";
+    html += "  xhttp.open('GET', '/data', true);";
+    html += "  xhttp.send();";
+    html += "}";
+    html += "updateData();"; // Call the function once to update initially
+    html += "setInterval(updateData, 500);"; 
+    html += "</script>";
+    html += "</body></html>";
+    request->send(200, "text/html", html);
+  });
+
+  // Serve JSON data
+  server.on("/data", HTTP_GET, [](AsyncWebServerRequest *request) {
+    String json = "{\"temperature\":" + String(temperature) + ",\"humidity\":" + String(humidity) + "}";
+    Serial.println("Sending JSON data: " + json);
+    request->send(200, "application/json", json);
+  });
+
+  // Start server
+  server.begin();
+}
+
+void loop() {
+  // Your existing loop code
+  temperature = dht.readTemperature();
+  humidity = dht.readHumidity();
+
+  if (!isnan(temperature) && !isnan(humidity)) {
+    Serial.print("Temperature: ");
+    Serial.print(temperature);
+    Serial.print("°C | Humidity: ");
+    Serial.print(humidity);
+    Serial.println("%");
+  } else {
+    Serial.println("Error reading from DHT sensor");
+  }
+
+  delay(500); // Delay for 5 seconds before reading again
+}
