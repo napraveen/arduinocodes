@@ -1,1 +1,128 @@
+#include <WiFi.h>
+#include <AsyncTCP.h>
+#include <ESPAsyncWebServer.h>
+#include <DHT.h>
 
+const char* ssid = "zz";
+const char* password = "123456789";
+
+#define DHTPIN 13
+#define DHTTYPE DHT11
+
+DHT dht(DHTPIN, DHTTYPE);
+AsyncWebServer server(80);
+
+float temperature = 0.0;
+float humidity = 0.0;
+
+const int triggerPin = 12;
+const int echoPin = 14;
+long duration, inches, cm;
+
+void setup() {
+    Serial.begin(115200);
+    dht.begin();
+    pinMode(triggerPin, OUTPUT);
+    pinMode(echoPin, INPUT);
+
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+        Serial.print(".");
+    }
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("Your Local IP address is: ");
+    Serial.println(WiFi.localIP());
+
+ server.on("/", HTTP_GET, [](AsyncWebServerRequest *request) {
+        // Read temperature and humidity
+        temperature = dht.readTemperature();
+        humidity = dht.readHumidity();
+        
+        Distance(); // Update distance readings
+
+        String html = "<html><head><meta charset=\"UTF-8\"></head><body>";
+        html += "<script>";
+        html += "function updateData() {";
+        html += "  var xhttp = new XMLHttpRequest();";
+        html += "  xhttp.onreadystatechange = function() {";
+        html += "    if (this.readyState == 4 && this.status == 200) {";
+        html += "      var response = JSON.parse(this.responseText);";
+        html += "      document.getElementById('temperature').innerHTML = 'Temperature: ' + response.temperature + '°C';";
+        html += "      document.getElementById('humidity').innerHTML = 'Humidity: ' + response.humidity + '%';";
+        html += "      document.getElementById('inches').innerHTML = 'Distance in Inches: ' + response.inches + ' in';";
+        html += "      document.getElementById('cm').innerHTML = 'Distance in Centimeters: ' + response.cm + ' cm';";
+        html += "    }";
+        html += "  };";
+        html += "  xhttp.open('GET', '/getData', true);";
+        html += "  xhttp.send();";
+        html += "}";
+        html += "updateData();";
+        html += "setInterval(updateData, 1000);";
+        html += "</script>";
+
+        html += "</body></html>";
+
+        AsyncWebServerResponse *response = request->beginResponse(200, "text/html", html);
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        response->addHeader("Access-Control-Allow-Methods", "GET");
+        response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+        request->send(response);
+    });
+
+  server.on("/getData", HTTP_GET, [](AsyncWebServerRequest *request) {
+        Distance();
+        String data = "{\"temperature\":" + String(temperature) + ",\"humidity\":" + String(humidity) + ",\"inches\":" + String(inches) + ",\"cm\":" + String(cm) + "}";
+
+        AsyncWebServerResponse *response = request->beginResponse(200, "application/json", data);
+        response->addHeader("Access-Control-Allow-Origin", "*");
+        response->addHeader("Access-Control-Allow-Methods", "GET");
+        response->addHeader("Access-Control-Allow-Headers", "Content-Type");
+        request->send(response);
+    });
+
+    server.begin();
+}
+
+void loop() {
+    temperature = dht.readTemperature();
+    humidity = dht.readHumidity();
+
+    if (!isnan(temperature) && !isnan(humidity)) {
+        Serial.print("Temperature: ");
+        Serial.print(temperature);
+        Serial.print("°C | Humidity: ");
+        Serial.print(humidity);
+        Serial.println("%");
+    } else {
+        Serial.println("Error reading from DHT sensor");
+    }
+
+    delay(500);
+}
+
+long microsecondsToInches(long microseconds) {
+    return microseconds / 74 / 2;
+}
+
+long microsecondsToCentimeters(long microseconds) {
+    return microseconds / 29 / 2;
+}
+
+void Distance() {
+    digitalWrite(triggerPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(triggerPin, HIGH);
+    delayMicroseconds(5);
+    digitalWrite(triggerPin, LOW);
+    duration = pulseIn(echoPin, HIGH);
+    cm = microsecondsToCentimeters(duration);
+    inches = microsecondsToInches(duration);
+    Serial.print("Distance in Inches: ");
+    Serial.println(inches);
+    Serial.print("Distance in Centimeters: ");
+    Serial.println(cm);
+}
