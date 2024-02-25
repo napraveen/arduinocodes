@@ -1,0 +1,113 @@
+#include <WiFi.h>
+#include <WebServer.h>
+
+const char* html_page = R"(
+<!DOCTYPE html>
+<html>
+<head>
+    <title>ESP32 Ultrasonic WebServer</title>
+    <script>
+        function updateDistances() {
+            var xhttp = new XMLHttpRequest();
+            xhttp.onreadystatechange = function() {
+                if (this.readyState == 4 && this.status == 200) {
+                    var response = JSON.parse(this.responseText);
+                    document.getElementById("inches").innerHTML = "Distance in Inches: " + response.inches + " in";
+                    document.getElementById("cm").innerHTML = "Distance in Centimeters: " + response.cm + " cm";
+                }
+            };
+            xhttp.open("GET", "/getDistances", true);
+            xhttp.send();
+        }
+
+        // Update distances every 1 second
+        setInterval(updateDistances, 1000);
+    </script>
+</head>
+<body>
+    <h1>ESP32 Ultrasonic HC-Sr04 WebServer</h1>
+    <p id="inches">Distance in Inches: %inches% in</p>
+    <p id="cm">Distance in Centimeters: %cm% cm</p>
+</body>
+</html>
+)";
+
+WebServer server(80);
+
+const char* ssid = "a";
+const char* password = "123456789";
+
+const int triggerPin = 12;
+const int echoPin = 14;
+long duration, inches, cm;
+const String corsHeaders = "Access-Control-Allow-Origin: http://localhost:3000";
+
+
+void MainPage() {
+    Distance();
+
+    String _html_page = html_page;
+    _html_page.replace("%inches%", String(inches));
+    _html_page.replace("%cm%", String(cm));
+    server.send(200, "text/html", _html_page);
+}
+
+void GetDistances() {
+    Distance();
+
+    String response = "{\"inches\": " + String(inches) + ", \"cm\": " + String(cm) + "}";
+    server.send(200, "application/json", response);
+    server.sendHeader("Access-Control-Allow-Origin", "http://localhost:3000");
+}
+
+void Distance() {
+    pinMode(triggerPin, OUTPUT);
+    digitalWrite(triggerPin, LOW);
+    delayMicroseconds(2);
+    digitalWrite(triggerPin, HIGH);
+    delayMicroseconds(5);
+    digitalWrite(triggerPin, LOW);
+    pinMode(echoPin, INPUT);
+    duration = pulseIn(echoPin, HIGH);
+
+    cm = microsecondsToCentimeters(duration);
+    inches = microsecondsToInches(duration);
+
+    Serial.print("Distance in Inches: ");
+    Serial.println(inches);
+    Serial.print("Distance in Centimeters: ");
+    Serial.println(cm);
+}
+
+void setup(void) {
+    Serial.begin(115200);
+    WiFi.mode(WIFI_STA);
+    WiFi.begin(ssid, password);
+    Serial.print("Connecting to ");
+    Serial.println(ssid);
+    // delay(1000);
+    while (WiFi.waitForConnectResult() != WL_CONNECTED) {
+        Serial.print(".");
+    }
+    Serial.print("Connected to ");
+    Serial.println(ssid);
+    Serial.print("Your Local IP address is: ");
+    Serial.println(WiFi.localIP());
+
+    server.on("/", MainPage);
+    server.on("/getDistances", GetDistances);
+    server.begin();
+}
+
+void loop(void) {
+    server.handleClient();
+    // You can add other loop-related code here
+}
+
+long microsecondsToInches(long microseconds) {
+    return microseconds / 74 / 2;
+}
+
+long microsecondsToCentimeters(long microseconds) {
+    return microseconds / 29 / 2;
+}
